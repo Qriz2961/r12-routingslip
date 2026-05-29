@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RFRO XII — New Transaction & Routing Slip v6</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1a3a4a;
+  --navy2:#0f2530;
+  --amber:#d4a537;
+  --amber2:#b8891e;
+  --green:#2e7d32;
+  --green-bg:#f0f9f0;
+  --green-border:#a5d6a7;
+  --blue:#1565c0;
+  --blue-bg:#e8f0fe;
+  --red:#c62828;
+  --gray:#f5f5f5;
+  --border:#d0d5dd;
+  --text:#111;
+  --muted:#667085;
+  --radius:8px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',Arial,sans-serif;background:#f0f2f5;min-height:100vh;padding:20px}
+
+/* ─── APP HEADER ─────────────────────────────── */
+.app-bar{background:var(--navy);color:white;padding:14px 24px;border-radius:12px 12px 0 0;display:flex;align-items:center;gap:12px;margin-bottom:0}
+.app-bar .logo{font-size:18px;font-weight:700;letter-spacing:.5px}
+.app-bar .sub{font-size:12px;opacity:.7;margin-left:auto}
+
+/* ─── MAIN CARD ──────────────────────────────── */
+.card{background:white;border-radius:0 0 12px 12px;box-shadow:0 4px 24px rgba(0,0,0,.12);max-width:520px;margin:0 auto;overflow:hidden}
+
+/* ─── MODAL HEADER ───────────────────────────── */
+.modal-hdr{padding:22px 24px 0;border-bottom:1px solid #f0f0f0;padding-bottom:16px}
+.modal-hdr h2{font-size:20px;font-weight:700;color:var(--text)}
+
+/* ─── FORM ───────────────────────────────────── */
+.form-body{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:13px;font-weight:600;color:var(--text)}
+.fg label .req{color:#e53935}
+.fg input,.fg select,.fg textarea{
+  width:100%;padding:10px 13px;border:1.5px solid var(--border);
+  border-radius:var(--radius);font-size:14px;font-family:inherit;
+  color:var(--text);background:white;transition:all .2s;outline:none;
+}
+.fg input:focus,.fg select:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(26,58,74,.1)}
+.fg input::placeholder,.fg select option[value=""]{color:#aaa}
+.fg .hint{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* custom select arrow */
+.fg select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23667' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px}
+select optgroup{font-weight:700;color:var(--navy);background:#f5f7fa}
+
+/* fee/time info box */
+.info-box{background:var(--green-bg);border:1px solid var(--green-border);border-radius:var(--radius);padding:12px 16px;display:none;gap:12px;flex-direction:column}
+.info-box.show{display:flex}
+.info-row{display:flex;justify-content:space-between;font-size:13px}
+.info-row .lbl{color:var(--muted);font-weight:500}
+.info-row .val{color:var(--green);font-weight:600}
+
+/* ─── UNITS SECTION ──────────────────────────── */
+.units-hdr{display:flex;justify-content:space-between;align-items:center}
+.units-label{font-size:13px;font-weight:600;color:var(--text)}
+.units-sub{font-size:12px;color:var(--muted)}
+.btn-add-unit{background:white;border:1.5px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;color:var(--navy);display:flex;align-items:center;gap:4px;transition:all .2s}
+.btn-add-unit:hover{border-color:var(--navy);background:#f5f8fa}
+
+.unit-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:10px;position:relative;background:#fafafa}
+.unit-card .unit-title{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:10px}
+.unit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.unit-grid .span2{grid-column:span 2}
+.unit-grid .fg label{font-size:11px;font-weight:600;color:var(--muted)}
+.unit-grid .fg input{font-size:12px;padding:7px 10px}
+.btn-remove{position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;color:#aaa;font-size:18px;line-height:1}
+.btn-remove:hover{color:var(--red)}
+
+/* ─── FORM ACTIONS ───────────────────────────── */
+.form-actions{padding:16px 24px;border-top:1px solid #f0f0f0;display:flex;gap:12px}
+.btn-cancel{flex:1;padding:12px;background:white;border:1.5px solid var(--border);border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);transition:all .2s}
+.btn-cancel:hover{background:#f5f5f5}
+.btn-create{flex:2;padding:12px;background:var(--navy);border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;color:white;transition:all .2s}
+.btn-create:hover{background:var(--navy2)}
+.btn-create:active{transform:scale(.98)}
+
+/* ─── TRANSACTION REGISTERED SCREEN ─────────── */
+#screen-registered{display:none}
+.reg-hdr{background:var(--navy);color:white;padding:18px 24px;text-align:center}
+.reg-hdr .org{font-size:12px;opacity:.75;margin-bottom:4px}
+.reg-hdr h2{font-size:17px;font-weight:700}
+
+.ref-section{padding:24px;text-align:center;border-bottom:1px solid #f0f0f0}
+.ref-label{font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--amber);margin-bottom:10px}
+.ref-code{border:2.5px solid var(--navy);border-radius:10px;padding:16px 20px;font-family:'Courier New',monospace;font-size:24px;font-weight:700;color:var(--navy);letter-spacing:2px;word-break:break-all}
+.ref-note{font-size:12px;color:var(--muted);margin-top:10px}
+.ref-note span{color:var(--amber);margin-right:4px}
+
+.txn-details{padding:20px 24px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid #f0f0f0}
+.txn-row{display:flex;gap:12px;font-size:13px}
+.txn-row .tl{color:var(--muted);font-weight:500;min-width:110px;flex-shrink:0}
+.txn-row .tv{color:var(--text);font-weight:500}
+.fee-val{color:var(--green);font-weight:700}
+
+.staff-box{margin:16px 24px;background:#fffde7;border:1px solid #ffe082;border-radius:var(--radius);padding:14px 16px}
+.staff-box h4{font-size:12px;font-weight:700;color:#5d4037;margin-bottom:8px}
+.staff-box ol{padding-left:16px;display:flex;flex-direction:column;gap:5px}
+.staff-box li{font-size:12px;color:#5d4037}
+
+/* ─── ROUTING SLIP ───────────────────────────── */
+.slip-divider{margin:0 24px;border:none;border-top:3px dashed #bbb;padding-top:8px;color:#aaa;text-align:center;font-size:11px;padding-bottom:4px}
+
+.slip-wrapper{padding:20px 24px 0}
+
+.slip-head{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:3px solid var(--navy);margin-bottom:14px}
+.slip-head-l h3{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:5px}
+.slip-head-l p{font-size:10px;color:#555;line-height:1.6}
+.slip-head-r{text-align:right}
+.slip-head-r .ltfrb{font-size:13px;font-weight:700;color:var(--navy)}
+.slip-head-r .ref-tag{background:var(--navy);color:var(--amber);font-family:monospace;font-size:10px;padding:3px 8px;border-radius:3px;display:inline-block;margin-top:5px;letter-spacing:.5px}
+.slip-head-r .dt{font-size:10px;color:var(--amber);font-weight:600;margin-top:4px}
+
+.mc-banner{background:#fff8e1;border:1.5px solid var(--amber);border-radius:5px;padding:10px 13px;margin-bottom:14px;font-size:11px;color:#333;line-height:1.6}
+.mc-banner strong{color:var(--navy)}
+
+.rtable{width:100%;border-collapse:collapse;font-size:9.5px;margin-bottom:20px}
+.rtable th{background:var(--navy);color:white;padding:9px 8px;text-align:left;border:1px solid #2c4f63;font-weight:600;font-size:9px}
+.rtable td{border:1px solid #ccc;padding:8px;height:68px;vertical-align:top}
+.rtable tr:nth-child(even) td{background:#f9f9f9}
+.stn{font-weight:700;color:var(--navy);font-size:10px;margin-bottom:3px}
+.sdesc{font-size:8.5px;color:#777;line-height:1.3}
+.sigbox{border-bottom:1px solid #bbb;height:38px;margin-bottom:2px}
+.flabel{font-size:7.5px;color:#aaa;margin-top:1px}
+
+/* ─── BOTTOM ACTIONS ─────────────────────────── */
+.bottom-actions{padding:16px 24px;border-top:1px solid #f0f0f0;display:flex;gap:12px;background:white;position:sticky;bottom:0}
+.btn-done{flex:1;padding:12px;background:white;border:1.5px solid var(--border);border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;color:var(--text)}
+.btn-print{flex:2;padding:12px;background:var(--navy);border:none;border-radius:var(--radius);font-size:14px;font-weight:700;cursor:pointer;color:white;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-print:hover{background:var(--navy2)}
+
+/* ─── PRINT ──────────────────────────────────── */
+@media print{
+
+  /* ── 1. Page setup: Folio 8.5x13, portrait, 2in top ── */
+  @page{
+    size:8.5in 13in portrait;
+    margin-top:2in;
+    margin-bottom:0.75in;
+    margin-left:0.75in;
+    margin-right:0.75in;
+  }
+
+  /* ── 2. Force ALL backgrounds and colors to print ── */
+  *{
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+    color-adjust:exact!important;
+  }
+
+  /* ── 3. Hide chrome, show content — JS pre-sets visibility ── */
+  body{background:white!important;padding:0!important}
+  .app-bar,
+  .modal-hdr,
+  .form-body,
+  .form-actions,
+  #screen-form,
+  .bottom-actions{display:none!important}
+
+  /* ── 4. Registered screen — JS sets display:block before print ── */
+  .reg-hdr{
+    background:#1a3a4a!important;
+    color:white!important;
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+  .ref-section,.txn-details,.staff-box{display:block!important}
+
+  /* ── 5. PAGE BREAK: stub = page 1, routing slip = page 2 ── */
+  /* The inline label div just before slip-wrapper acts as the break point */
+  .slip-divider{
+    display:block!important;
+    page-break-after:always!important;
+    break-after:always!important;
+    border:none!important;
+    height:0!important;
+    margin:0!important;
+    padding:0!important;
+    overflow:hidden!important;
+    visibility:hidden!important;
+  }
+  /* The small text label div between divider and slip-wrapper */
+  #screen-registered > div[style*="text-align:center"]{
+    display:none!important;
+  }
+
+  /* ── 6. Routing slip starts on page 2 ── */
+  .slip-wrapper{
+    display:block!important;
+    page-break-before:always!important;
+    break-before:always!important;
+    padding:0!important;
+    margin-top:0!important;
+  }
+
+  /* ── 7. Table and card ── */
+  .card{box-shadow:none!important;border-radius:0!important;max-width:100%!important}
+  .rtable{width:100%!important;border-collapse:collapse!important}
+  .rtable td{height:80px!important}
+  .rtable th{
+    background:#1a3a4a!important;
+    color:white!important;
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+  .rtable tr:nth-child(even) td{
+    background:#f9f9f9!important;
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+
+  /* ── 8. Folder color box ── */
+  #folderColorBox{
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+    color-adjust:exact!important;
+  }
+
+  /* ── 9. Ref code box ── */
+  .ref-code{
+    border:2.5px solid #1a3a4a!important;
+    border-radius:10px!important;
+  }
+
+  /* ── 10. MC banner ── */
+  .mc-banner{
+    background:#fff8e1!important;
+    border:1.5px solid #d4a537!important;
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+
+  /* ── 11. Staff box ── */
+  .staff-box{
+    background:#fffde7!important;
+    border:1px solid #ffe082!important;
+    -webkit-print-color-adjust:exact!important;
+    print-color-adjust:exact!important;
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     APP BAR
+═══════════════════════════════════════════════════════ -->
+<div style="max-width:520px;margin:0 auto">
+<div class="app-bar">
+  <span style="font-size:20px">🚌</span>
+  <div>
+    <div class="logo">RFRO XII — TMS</div>
+    <div style="font-size:11px;opacity:.65">Routing Slip Generator</div>
+  </div>
+  <div class="sub">LTFRB Region XII • Koronadal City</div>
+</div>
+
+<div class="card">
+
+<!-- ═══════════════════════════════════════════════════════
+     SCREEN 1: NEW TRANSACTION FORM
+═══════════════════════════════════════════════════════ -->
+<div id="screen-form">
+  <div class="modal-hdr">
+    <h2>New Transaction</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <span id="seqPreview" style="font-size:12px;color:var(--muted);font-weight:500">Next docket sequence: #0001</span>
+      <button onclick="adminResetCounter()" style="font-size:11px;color:var(--amber2);background:none;border:none;cursor:pointer;font-weight:600;padding:0;text-decoration:underline dotted">⚙ Reset Counter</button>
+    </div>
+  </div>
+
+  <div class="form-body">
+
+    <!-- Date Received -->
+    <div class="fg">
+      <label>Date Received <span class="req">*</span></label>
+      <input type="date" id="dateReceived">
+    </div>
+
+    <!-- Applicant Name -->
+    <div class="fg">
+      <label>Applicant Name <span class="req">*</span></label>
+      <input type="text" id="applicantName" placeholder="Full name of applicant">
+    </div>
+
+    <!-- Entity / Company Name -->
+    <div class="fg">
+      <label>Entity / Company Name</label>
+      <input type="text" id="entityName" placeholder="Type TSE name or acronym to search…" list="entityList" autocomplete="off">
+      <datalist id="entityList">
+        <option value="Alliance of Public Transport Advocating Road Safety Cooperative (APTARS)">
+        <option value="Aljod Transport Service Cooperative (ALJODTSCO)">
+        <option value="Banga Transport Service Cooperative (BATRANSCO)">
+        <option value="General Santos City Transport Cooperative (GENSAN TC)">
+        <option value="Koronadal City Transport Cooperative (KCORTRANSCO)">
+        <option value="Koronadal United Transport Cooperative (KUTOCO)">
+        <option value="Lake Sebu Multipurpose Cooperative (LSMPC)">
+        <option value="Landoray and Matutum Community Transport Cooperative (LMCTC)">
+        <option value="Lucky Star Aircon Transport Multi-Purpose Cooperative (LUCKYSTAR)">
+        <option value="Makar Transport Service Cooperative (MAKARTSC)">
+        <option value="Malungon Transport Service Cooperative (MALTRANSCO)">
+        <option value="Norala Transport Service Cooperative (NORTRANSCO)">
+        <option value="Polomolok Transport Service Cooperative (POLTRANSCO)">
+        <option value="Saligan Operators and Drivers Transport Cooperative (SALIGAN)">
+        <option value="Santo Nino Star Transport Cooperative (SNSTC)">
+        <option value="Soccsksargen Satsai Transport Cooperative (SATSAI)">
+        <option value="South Cotabato Transport Operators Association (SCTOA)">
+        <option value="Surallah Van Service Cooperative (SURVASCO)">
+        <option value="Tampakan Aircon Van Transport Service Cooperative (TAVTRANSCO)">
+        <option value="Tantangan Transport Service Multi-Purpose Cooperative (TANTRANSCO)">
+        <option value="Tboli Aircon Transit Service Cooperative (TATSCO)">
+        <option value="Tboli Transport Service Cooperative (TTRANSCO)">
+        <option value="Tupi Transport Service Cooperative (TUPITRANSCO)">
+        <option value="United Transport Operators and Drivers Services Cooperative (UTODCO)">
+        <option value="Venus Transport Service Cooperative (VENUSTSC)">
+        <option value="Yellow Bus Line A.C. Incorporated">
+        <option value="Bagumbayan Transport Service Cooperative (BAGTRANSCO)">
+        <option value="Columbio Transport Service Cooperative (COLTRANSCO) — TSE00074">
+        <option value="Esperanza Transport Service Cooperative (ETSCO)">
+        <option value="Isulan Transport Service Cooperative (ISUTRANSCO)">
+        <option value="Kalamansig Transport Service Cooperative (KALTRANSCO)">
+        <option value="Lambayong Tacurong Transport Service Cooperative (LATTRASCO)">
+        <option value="President Quirino Transport Service Cooperative (PQTSC)">
+        <option value="Senator Ninoy Aquino Transport Cooperative (SNATCO)">
+        <option value="Snavoda Transport Cooperative (SNAVODA TC)">
+        <option value="Sultan Kudarat Multicab Operators Multi-Purpose Cooperative (SKMCO)">
+        <option value="Tacurong City Transport Cooperative (TACTRANSCO)">
+        <option value="Alabel Transport Service Cooperative (ALTRANSCO)">
+        <option value="Glan Transport Cooperative (GLANTRANSCO)">
+        <option value="Kiamba Transport Cooperative (KIAMBATC)">
+        <option value="Maitum Transport Service Cooperative (MAITUMTSC)">
+        <option value="Malapatan Transport Service Cooperative (MALATRANSCO)">
+        <option value="Maasim Transport Cooperative (MAASIMC)">
+        <option value="Alamada Transport Cooperative (ALAMADATC)">
+        <option value="Antipas Transport Service Cooperative (ANTIPASTSC)">
+        <option value="Carmen Transport Cooperative (CARMTRANSCO)">
+        <option value="Kabacan Transport Service Cooperative (KABACANTSC)">
+        <option value="Kidapawan City Transport Cooperative (KIDCITYTC)">
+        <option value="Kidavjoda Transport Cooperative (KIDTRANSCO)">
+        <option value="Kutawato Transport Cooperative (KUTRANSCO)">
+        <option value="Kutabato Transport Operators Cooperative (KUTOCO-NC)">
+        <option value="Makilala Transport Service Cooperative (MAKILALATSC)">
+        <option value="Matalam Transport Cooperative (MATALAMTC)">
+        <option value="Midsayap Transport Cooperative (MIDSAYAPTC)">
+        <option value="Pigcawayan Transport Service Cooperative (PIGTRANSCO)">
+        <option value="President Roxas Transport Cooperative (PRTC)">
+        <option value="Bangsamoro Land and Sea Transport Cooperative (BLSTC)">
+        <option value="Datu Paglas Transport Cooperative (DAPATSCO)">
+        <option value="Galaxy Transport Cooperative (GALAXYTC)">
+        <option value="Maguindanao Express Transport Cooperative (MAGUEX)">
+        <option value="Markadz Transport Cooperative (MARKADZ)">
+        <option value="Parang Transport Service Cooperative (PATSCO)">
+        <option value="Bachelor Express Incorporated">
+        <option value="Davao Metro Shuttle Inc.">
+        <option value="Genesis Transport Service Inc.">
+        <option value="GMW Transit Inc.">
+        <option value="Rural Transit Mindanao Inc.">
+        <option value="Mindanao Star Transport Inc.">
+        <option value="South Cotabato Express Transport Inc.">
+      </datalist>
+      <span class="hint">Type TSE name or acronym — leave blank for individual / walk-in applicant</span>
+    </div>
+
+    <!-- Denomination -->
+    <div class="fg">
+      <label>Denomination <span class="req">*</span></label>
+      <select id="denomination" onchange="onFormChange()">
+        <option value="">-- Select --</option>
+        <option value="PJ">PJ — Public Utility Jeepney</option>
+        <option value="PJ">PJ — Modern PUJ / E-Jeepney</option>
+        <option value="UV">UV — UV Express</option>
+        <option value="FC">FC — Filcab / Multicab</option>
+        <option value="PB">PB — Public Utility Bus</option>
+        <option value="TX">TX — Air-Conditioned Taxi</option>
+        <option value="SH">SH — Shuttle Bus</option>
+        <option value="SB">SB — School Bus Service</option>
+        <option value="TH">TH — Truck-for-Hire</option>
+        <option value="TB">TB — Tourist Bus</option>
+        <option value="TV">TV — Transport Network Vehicle Service</option>
+        <option value="TC">TC — Transport Cooperative (General)</option>
+      </select>
+    </div>
+
+    <!-- Request / Transaction Type -->
+    <div class="fg">
+      <label>Request Type <span class="req">*</span></label>
+      <select id="requestType" onchange="onTxnChange()">
+        <option value="">Type to search or select from 110 LTFRB service ty…</option>
+
+        <optgroup label="── CONFIRMATION (Most Frequent) ──">
+          <option value="CN|CN|RFRO|Pale Yellow|#FFFFDD|PHP 200 / PHP 40 / PHP 240|4 Working Days, 6 Hours">CONFIRMATION OF UNITS AND ISSUANCE OF CERTIFICATE OF CONFIRMATION STICKER (RFRO)</option>
+        </optgroup>
+
+        <optgroup label="── Applications WITH Hearing ──">
+          <option value="NC|NC|MC2017|Orange|#FF8C00|Per order|30 Working Days">NEW CERTIFICATE OF PUBLIC CONVENIENCE (NC)</option>
+          <option value="EV|EV|MC2017|Dark Blue|#003087|PHP 480|20 Working Days">EXTENSION OF VALIDITY OF CPC (EV)</option>
+          <option value="MR|MR|MC2017|Pale Yellow|#FFFFDD|PHP 480|20 Working Days">MODIFICATION OF ROUTE (MR)</option>
+          <option value="CN-H|CN|MC2017|Pale Yellow|#FFFFDD|PHP 240|15 Working Days">CONSOLIDATION OF CASES – WITH HEARING</option>
+          <option value="CC-H|CC|MC2017|Pale Yellow|#FFFFDD|PHP 240|15 Working Days">CHANGE OF CHARACTER – WITH HEARING</option>
+          <option value="CS|CS|MC2017|Pale Yellow|#FFFFDD|PHP 240|15 Working Days">ADOPTION OF COLOR SCHEME / TRADE NAME (CS)</option>
+          <option value="CP|CP|MC2017|White|#FFFFFF|No fee|20 Working Days">COMPLAINT / PETITION WITH HEARING (CP)</option>
+        </optgroup>
+
+        <optgroup label="── Applications WITHOUT Hearing ──">
+          <option value="TN|TN|MC2017|Pale Yellow|#FFFFDD|PHP 524|7 Working Days">TRANSFER / SALE OF CPC (TN)</option>
+          <option value="CV|CV|MC2017|Red|#FF0000|PHP 480|15 Working Days">CONVERSION OF SERVICE (CV)</option>
+          <option value="DS|DS|MC2017|Lemon Yellow|#FFFF00|PHP 120|5 Working Days">DROPPING AND SUBSTITUTION OF UNIT (DS)</option>
+          <option value="D|D|MC2017|Dark Brown|#654321|PHP 60|3 Working Days">DROPPING OF UNIT (D)</option>
+          <option value="RL|RL|MC2017|Pale Yellow|#FFFFDD|PHP 480|15 Working Days">ROUTE LICENSE (RL)</option>
+          <option value="SU|SU|MC2017|Pale Yellow|#FFFFDD|PHP 60|3 Working Days">STORAGE / SURRENDER OF UNIT PLATE (SU)</option>
+          <option value="SP-ST|SP|MC2017|Light Blue|#64B5F6|PHP 170|4 Working Days">SPECIAL PERMIT — SPECIFIC TRIP (SP-ST)</option>
+          <option value="SP-SO|SP|MC2017|Light Blue|#64B5F6|PHP 250|4 Working Days">SPECIAL PERMIT — SEASONAL OPERATION (SP-SO)</option>
+          <option value="SP-INT|SP|MC2017|Light Blue|#64B5F6|PHP 170|4 Working Days">SPECIAL PERMIT — INTERNATIONAL TRIP (SP-INT)</option>
+          <option value="UG|UG|MC2017|Pale Yellow|#FFFFDD|PHP 480|15 Working Days">UPGRADING OF SERVICE (UG)</option>
+          <option value="DG|DG|MC2017|Pale Yellow|#FFFFDD|PHP 480|15 Working Days">DOWNGRADING OF SERVICE (DG)</option>
+          <option value="CT|CT|MC2017|Red|#FF0000|PHP 480|15 Working Days">CONVERSION OF TRANSPORT MODE (CT)</option>
+          <option value="CC-NH|CC|MC2017|Pale Yellow|#FFFFDD|PHP 240|7 Working Days">CONSOLIDATION / CHANGE OF CASE — NO HEARING</option>
+          <option value="RU|RU|MC2017|Pale Yellow|#FFFFDD|PHP 120|7 Working Days">RECONSIDERATION / REVIEW (RU)</option>
+          <option value="CF|CF|MC2017|Pale Yellow|#FFFFDD|PHP 60|3 Working Days">CLEARANCE OF ACCOUNTS (CF)</option>
+          <option value="WA|WA|MC2017|Pale Yellow|#FFFFDD|No fee|3 Working Days">WAIVER (WA)</option>
+        </optgroup>
+
+        <optgroup label="── Administrative Operations ──">
+          <option value="LO1|LO1|AO|Orange|#FF8C00|Per order|30 Working Days">NEW CPC — FULL APPLICATION (LO1)</option>
+          <option value="LO2|LO2|AO|Dark Blue|#003087|PHP 480|20 Working Days">EXTENSION OF VALIDITY — CPC (LO2)</option>
+          <option value="LO3|LO3|AO|Maroon|#800000|PHP 524|7 Working Days">SALE AND TRANSFER OF CPC (LO3)</option>
+          <option value="LO4|LO4|AO|Mint Green|#98FF98|PHP 480|15 Working Days">AMENDMENT OF LINE (LO4)</option>
+          <option value="LO5|LO5|AO|Gray|#808080|PHP 240|7 Working Days">CONSOLIDATION OF CASE NUMBERS (LO5)</option>
+          <option value="LO6|LO6|AO|Black|#000000|PHP 570|7 Working Days">CHANGE OF PARTY APPLICANT (LO6)</option>
+          <option value="LO7|LO7|AO|Red|#FF0000|PHP 480|15 Working Days">CONVERSION (LO7)</option>
+          <option value="LO8|LO8|AO|Blue Green|#008080|Per order|30 Working Days">FARE INCREASE / DECREASE (LO8)</option>
+          <option value="AO1|AO1|AO|Lemon Yellow|#FFFF00|PHP 120|5 Working Days">DROPPING AND SUBSTITUTION OF UNIT (AO1)</option>
+          <option value="AO2|AO2|AO|Dark Brown|#654321|PHP 60|3 Working Days">DROPPING OF UNIT (AO2)</option>
+          <option value="AO3|AO3|AO|Light Blue|#64B5F6|PHP 170|4 Working Days">SPECIAL PERMIT (AO3)</option>
+          <option value="AO4|AO4|AO|Dark Green|#1B5E20|PHP 120|5 Working Days">CHANGE OF ENGINE (AO4)</option>
+          <option value="AO5|AO5|AO|Baby Pink|#FFB3D9|PHP 60|3 Working Days">CORRECTION OF ENTRY (AO5)</option>
+          <option value="AO6|AO6|AO|Golden Yellow|#FFD700|PHP 120|5 Working Days">ADOPTION OF COLOR SCHEME (AO6)</option>
+          <option value="AO7|AO7|AO|Royal Blue|#4169E1|PHP 60|3 Working Days">EXTENSION OF TIME TO REGISTER (AO7)</option>
+          <option value="AO8|AO8|AO|Lavender|#E6E6FA|PHP 240|7 Working Days">INSTALLATION OF ADVERTISEMENTS (AO8)</option>
+          <option value="AO9|AO9|AO|White|#FFFFFF|PHP 60|3 Working Days">RE-REGISTRATION OF UNIT (AO9)</option>
+          <option value="AO10|AO10|AO|Fuschia|#FF00FF|PHP 120|5 Working Days">REGISTRATION-IN-LIEU OF AUTHORIZED UNIT (AO10)</option>
+          <option value="AO11|AO11|AO|Violet|#EE82EE|PHP 120|5 Working Days">INTERCHANGE OF UNITS (AO11)</option>
+          <option value="AO12|AO12|AO|Beige|#F5F5DC|PHP 480|15 Working Days">UPGRADING / DOWNGRADING (AO12)</option>
+        </optgroup>
+
+        <optgroup label="── Inspection and Verification ──">
+          <option value="YVC|YVC|RFRO|Pale Yellow|#FFFFDD|PHP 40 per unit|4 Working Days">YEAR VERIFICATION AND COMPLIANCE (YVC) / eCC ISSUANCE</option>
+          <option value="IT|IT|RFRO|Pale Yellow|#FFFFDD|PHP 1,300|4 Working Days">INSPECTION OF TERMINAL (IT)</option>
+          <option value="IG|IG|RFRO|Pale Yellow|#FFFFDD|PHP 1,140|4 Working Days">INSPECTION OF GARAGE (IG)</option>
+          <option value="IU|IU|RFRO|Pale Yellow|#FFFFDD|PHP 240 per unit|3 Working Days">INSPECTION OF UNITS (IU)</option>
+          <option value="DCEP|DCEP|RFRO|Pale Yellow|#FFFFDD|PHP 500|3 Working Days">DRIVER'S COMPLAINT EVALUATION PROGRAM (DCEP)</option>
+        </optgroup>
+
+        <optgroup label="── Certification and Records ──">
+          <option value="CTC|CTC|RFRO|White|#FFFFFF|PHP 60 per page|2 Working Days">CERTIFIED TRUE COPY OF DOCUMENTS (CTC)</option>
+          <option value="FV|FV|RFRO|Pale Yellow|#FFFFDD|No fee|2 Working Days">FRANCHISE VERIFICATION (FV)</option>
+          <option value="CE|CE|RFRO|Pale Yellow|#FFFFDD|PHP 120|3 Working Days">CERTIFICATE OF ENDORSEMENT (CE)</option>
+          <option value="PA|PA|RFRO|Pale Yellow|#FFFFDD|PHP 300|5 Working Days">PROVISIONAL AUTHORITY — NEW (PA)</option>
+          <option value="PA-R|PA|RFRO|Pale Yellow|#FFFFDD|PHP 300|5 Working Days">PROVISIONAL AUTHORITY — RENEWAL (PA-R)</option>
+          <option value="SCP|SCP|RFRO|Pale Yellow|#FFFFDD|PHP 40 per trip|Per period">SOCIALIZED CARPOOL / LBSCP TRIP VALIDATION (SCP)</option>
+        </optgroup>
+
+        <optgroup label="── Complaints and Violations ──">
+          <option value="ACC|ACC|MC2017|White|#FFFFFF|No fee|15 Working Days">ADJUDICATION — APPREHENDED VEHICLES (ACC)</option>
+          <option value="COL|COL|MC2017|White|#FFFFFF|No fee|15 Working Days">COMPLAINT — OPERATOR / DRIVER (COL)</option>
+          <option value="JAO|JAO|MC2017|White|#FFFFFF|Per JAO 2014-001|15 Working Days">ADJUDICATION PER JAO 2014-001 (JAO)</option>
+          <option value="OC|OC|MC2017|White|#FFFFFF|No fee|15 Working Days">OVERCHARGING COMPLAINT (OC)</option>
+          <option value="UC|UC|MC2017|White|#FFFFFF|No fee|15 Working Days">UNDERCHARGING COMPLAINT (UC)</option>
+          <option value="NIT|NIT|MC2017|White|#FFFFFF|No fee|15 Working Days">NON-ISSUANCE OF TICKET (NIT)</option>
+          <option value="EA|EA|MC2017|White|#FFFFFF|No fee|15 Working Days">ERRATIC ACTS / ROAD RAGE (EA)</option>
+          <option value="RCP|RCP|MC2017|White|#FFFFFF|No fee|15 Working Days">REFUSAL TO CARRY PASSENGERS (RCP)</option>
+        </optgroup>
+
+        <optgroup label="── Special Programs ──">
+          <option value="FDP|FDP|RFRO|Pale Yellow|#FFFFDD|No fee|2 Working Days">FUEL DISCOUNT PROGRAM — ENROLLMENT / VALIDATION (FDP)</option>
+          <option value="LBSCP|LBSCP|RFRO|Pale Yellow|#FFFFDD|No fee|2 Working Days">LBSCP ENROLLMENT / VALIDATION</option>
+          <option value="LPTRP|LPTRP|RFRO|Pale Yellow|#FFFFDD|No fee|Per schedule">LPTRP REVIEW / EVALUATION (LPTRP)</option>
+        </optgroup>
+
+        <optgroup label="── Walk-in / Admin / Assistance ──">
+          <option value="VIS-RD|VIS|VIS|Pale Yellow|#FFFFDD|No fee|Same day">WALK-IN VISIT — REGIONAL DIRECTOR / STAFF</option>
+          <option value="VIS-COM|VIS|VIS|White|#FFFFFF|No fee|Same day">COMPLAINT — WALK-IN / VERBAL (GENERAL)</option>
+          <option value="VIS-AST|VIS|VIS|Pale Yellow|#FFFFDD|No fee|Same day">ASSISTANCE — INFORMATION / GUIDANCE REQUEST</option>
+          <option value="VIS-FU|VIS|VIS|Pale Yellow|#FFFFDD|No fee|Same day">FOLLOW-UP — PENDING TRANSACTION / APPLICATION</option>
+          <option value="VIS|VIS|VIS|Pale Yellow|#FFFFDD|No fee|Same day">VISITOR / WALK-IN BOOKING (GENERAL)</option>
+          <option value="TSE-NEW|NC|MC2017|Orange|#FF8C00|Per order|30 Working Days">NEW TSE REGISTRATION — FIRST-TIME CPC APPLICATION</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <!-- Fee/Time Info Box (auto-shows) -->
+    <div class="info-box" id="infoBox">
+      <div class="info-row"><span class="lbl">Estimated Fee:</span><span class="val" id="infoFee">—</span></div>
+      <div class="info-row"><span class="lbl">Processing Time:</span><span class="val" id="infoTime">—</span></div>
+    </div>
+
+    <!-- Contact Number -->
+    <div class="fg">
+      <label>Contact Number</label>
+      <input type="tel" id="contactNum" placeholder="e.g., 0917-xxx-xxxx">
+    </div>
+
+    <!-- Email -->
+    <div class="fg">
+      <label>Email</label>
+      <input type="email" id="emailAddr" placeholder="e.g., name@domain.com">
+    </div>
+
+    <!-- Units Involved -->
+    <div>
+      <div class="units-hdr">
+        <div>
+          <div class="units-label">🚌 Units Involved <span style="font-weight:400;color:var(--muted);font-size:12px">(optional)</span></div>
+        </div>
+        <button class="btn-add-unit" onclick="addUnit()">+ Add Unit</button>
+      </div>
+      <div id="unitsList">
+        <p id="noUnitsMsg" style="font-size:12px;color:var(--muted);margin-top:8px">No units added yet. Click "+ Add Unit" to include unit details.</p>
+      </div>
+    </div>
+
+  </div><!-- /form-body -->
+
+  <div class="form-actions">
+    <button class="btn-cancel" onclick="resetForm()">Cancel</button>
+    <button class="btn-create" onclick="createTransaction()">Create</button>
+  </div>
+</div><!-- /screen-form -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     SCREEN 2: TRANSACTION REGISTERED + ROUTING SLIP
+═══════════════════════════════════════════════════════ -->
+<div id="screen-registered">
+
+  <!-- Transaction Registered Header -->
+  <div class="reg-hdr">
+    <div class="org">LTFRB RFRO XII • KORONADAL CITY</div>
+    <h2>Transaction Registered</h2>
+  </div>
+
+  <!-- Reference Code Block -->
+  <div class="ref-section">
+    <div class="ref-label">REFERENCE / DOCKET NUMBER (MC 2017-002)</div>
+    <div class="ref-code" id="regRefCode">—</div>
+    <div class="ref-note"><span>🔥</span> Write this number on the client's paper request form</div>
+  </div>
+
+  <!-- Transaction Details -->
+  <div class="txn-details">
+    <div class="txn-row"><span class="tl">Applicant:</span><span class="tv" id="regApplicant">—</span></div>
+    <div class="txn-row"><span class="tl">Entity:</span><span class="tv" id="regEntity">—</span></div>
+    <div class="txn-row"><span class="tl">Transaction:</span><span class="tv" id="regTxn">—</span></div>
+    <div class="txn-row"><span class="tl">Denomination:</span><span class="tv" id="regDenom">—</span></div>
+    <div class="txn-row"><span class="tl">Date Received:</span><span class="tv" id="regDate">—</span></div>
+    <div class="txn-row"><span class="tl">Processing Fee:</span><span class="tv fee-val" id="regFee">—</span></div>
+    <div class="txn-row"><span class="tl">Processing Time:</span><span class="tv" id="regTime">—</span></div>
+  </div>
+
+  <!-- Staff Instructions -->
+  <div class="staff-box">
+    <h4>Staff Instructions:</h4>
+    <ol>
+      <li>Write the Reference Number on the client's paper request form</li>
+      <li>Inform client of processing fee and processing time</li>
+      <li>Print routing slip and staple to folder</li>
+      <li>Direct client to the Cashier for payment</li>
+    </ol>
+  </div>
+
+  <!-- CLIP LINE -->
+  <hr class="slip-divider">
+  <div style="text-align:center;font-size:10px;color:#aaa;margin-bottom:8px">↑ RECEIPT ABOVE THIS LINE &nbsp;|&nbsp; ROUTING SLIP BELOW — CLIP OR STAPLE TO FOLDER ↓</div>
+
+  <!-- ROUTING SLIP -->
+  <div class="slip-wrapper">
+    <div class="slip-head">
+      <div class="slip-head-l">
+        <h3>⚙️ TRANSACTION ROUTING SLIP</h3>
+        <p><strong>Land Transportation Franchising and Regulatory Board</strong></p>
+        <p>RFRO XII — Koronadal City, South Cotabato</p>
+        <p style="margin-top:6px"><strong>Applicant:</strong> <span id="slipApplicant">—</span></p>
+        <p><strong>Entity:</strong> <span id="slipEntity">—</span></p>
+        <p><strong>Transaction:</strong> <span id="slipTxn">—</span></p>
+      </div>
+      <div class="slip-head-r">
+        <div class="ltfrb">LTFRB</div>
+        <div class="ref-tag" id="slipRef">—</div>
+        <div class="dt" id="slipDate">—</div>
+      </div>
+    </div>
+
+    <div class="mc-banner" style="display:flex;align-items:center;gap:14px;">
+      <div style="flex:1">
+        <strong>⚠️ Filing Requirement (MC 2005-011):</strong>
+        This application must be filed in a <strong id="slipFolder">—</strong> folder.
+        <span id="slipSvcNote"></span>
+      </div>
+      <div id="folderColorBox" style="width:80px;min-width:80px;height:40px;border-radius:5px;border:1.5px solid rgba(0,0,0,.25);background:#e0e0e0;flex-shrink:0;display:flex;align-items:center;justify-content:center;-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+        <span id="folderColorLabel" style="font-size:9px;font-weight:700;color:rgba(0,0,0,.5);text-align:center;line-height:1.2;padding:2px;pointer-events:none">—</span>
+      </div>
+    </div>
+
+    <table class="rtable">
+      <thead>
+        <tr>
+          <th style="width:19%">Station / Unit</th>
+          <th style="width:27%">Officer Name (Print &amp; Sign)</th>
+          <th style="width:26%">Date / Time</th>
+          <th style="width:28%">Remarks (OK / Not OK)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="stn">1. PACD</div><div class="sdesc">Preliminary Assessment<br>Complaint Desk</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Signature / Initials</div></td>
+          <td><div class="sigbox"></div><div class="flabel">HH:MM — DD MMM YYYY</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Initiate / Received / Docketed</div></td>
+        </tr>
+        <tr>
+          <td><div class="stn">2. ASSESSMENT</div><div class="sdesc">Technical Assessment<br>Compliance Check</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Signature / Initials</div></td>
+          <td><div class="sigbox"></div><div class="flabel">HH:MM — DD MMM YYYY</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Evaluated / POS Issued</div></td>
+        </tr>
+        <tr id="cashierRow">
+          <td><div class="stn">3. CASHIER</div><div class="sdesc">Payment &amp; Receipt<br>Processing</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Signature / Initials</div></td>
+          <td><div class="sigbox"></div><div class="flabel">HH:MM — DD MMM YYYY</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Payment Received / OR No.</div></td>
+        </tr>
+        <tr>
+          <td><div class="stn">4. TECH/LEGAL/ADMIN</div><div class="sdesc">Technical, Legal &amp;<br>Administrative Review</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Signature / Initials</div></td>
+          <td><div class="sigbox"></div><div class="flabel">HH:MM — DD MMM YYYY</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Reviewed / Approved</div></td>
+        </tr>
+        <tr>
+          <td><div class="stn">5. RECORDS</div><div class="sdesc">Filing &amp; Archival<br>Document Management</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Signature / Initials</div></td>
+          <td><div class="sigbox"></div><div class="flabel">HH:MM — DD MMM YYYY</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Filed under Permanent Case No.</div></td>
+        </tr>
+        <tr>
+          <td><div class="stn">6. COMPLETION &amp; RELEASE</div><div class="sdesc">Final Sign-Off<br>Release to Applicant</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Signature / Initials</div></td>
+          <td><div class="sigbox"></div><div class="flabel">HH:MM — DD MMM YYYY</div></td>
+          <td><div class="sigbox"></div><div class="flabel">Released / eCC / Sticker Issued</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div><!-- /slip-wrapper -->
+
+  <!-- Bottom Actions -->
+  <div class="bottom-actions">
+    <button class="btn-done" onclick="resetForm()">✓ Done</button>
+    <button class="btn-print" onclick="safePrint()">🖨️ Print Stub + Routing Slip</button>
+  </div>
+
+</div><!-- /screen-registered -->
+
+</div><!-- /card -->
+</div><!-- /max-width wrapper -->
+
+<script>
+// ─── MONTH LETTERS (MC 2017-002) ──────────────────────────────────────────
+const ML = ['a','b','c','d','e','f','g','h','i','j','k','l'];
+
+// ─── GLOBAL SEQUENCE COUNTER ───────────────────────────────────────────────
+// Single running counter across ALL transaction types, denominations, and TSEs.
+// Resets to 0001 every calendar year. Format: YYYY-e-NNNN
+const SEQ_KEY  = 'rfro12_seq_v6';       // counter value
+const SEQ_YEAR = 'rfro12_seq_v6_year';  // year the counter belongs to
+
+function nextSeq() {
+  const now    = new Date();
+  const currYr = now.getFullYear();
+  const storedYr = parseInt(localStorage.getItem(SEQ_YEAR)||'0', 10);
+
+  // Year rollover — reset counter when year changes
+  if (storedYr !== currYr) {
+    localStorage.setItem(SEQ_YEAR, String(currYr));
+    localStorage.setItem(SEQ_KEY, '0');
+  }
+
+  const n = parseInt(localStorage.getItem(SEQ_KEY)||'0', 10) + 1;
+  localStorage.setItem(SEQ_KEY, String(n));
+  updateSeqDisplay(n);
+  return String(n).padStart(4,'0');
+}
+
+function peekSeq() {
+  // Returns the NEXT sequence number without incrementing
+  const now    = new Date();
+  const currYr = now.getFullYear();
+  const storedYr = parseInt(localStorage.getItem(SEQ_YEAR)||'0', 10);
+  if (storedYr !== currYr) return 1;
+  return parseInt(localStorage.getItem(SEQ_KEY)||'0', 10) + 1;
+}
+
+function updateSeqDisplay(n) {
+  const el = document.getElementById('seqPreview');
+  if (el) {
+    el.textContent = 'Next docket sequence: #' + String(n||peekSeq()).padStart(4,'0');
+  }
+}
+
+// ─── SET TODAY's DATE ──────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  const d = document.getElementById('dateReceived');
+  d.value = new Date().toISOString().split('T')[0];
+  updateSeqDisplay(); // Show next sequence on load
+});
+
+// ─── TRANSACTION TYPE CHANGE ───────────────────────────────────────────────
+let _currentParts = null;
+
+function onTxnChange() {
+  const sel = document.getElementById('requestType');
+  const val = sel.value;
+  if (!val) { document.getElementById('infoBox').classList.remove('show'); _currentParts=null; return; }
+  const p = val.split('|');
+  _currentParts = p;
+  // fee / time
+  document.getElementById('infoFee').textContent  = p[5]||'—';
+  document.getElementById('infoTime').textContent = p[6]||'—';
+  document.getElementById('infoBox').classList.add('show');
+}
+
+function onFormChange() { /* placeholder for denom change hooks */ }
+
+// ─── CREATE TRANSACTION ────────────────────────────────────────────────────
+function createTransaction() {
+  const applicant = document.getElementById('applicantName').value.trim();
+  const entity    = document.getElementById('entityName').value.trim();
+  const dSel      = document.getElementById('denomination');
+  const rSel      = document.getElementById('requestType');
+
+  if (!applicant) { alert('⚠️ Applicant Name is required.'); return; }
+  if (!dSel.value) { alert('⚠️ Please select a Denomination.'); return; }
+  if (!rSel.value) { alert('⚠️ Please select a Request Type.'); return; }
+
+  const p      = rSel.value.split('|');
+  const dispCode = p[0];
+  const mc2017   = p[1];
+  const regime   = p[2];
+  const folder   = p[3];
+  const folderHex= p[4];
+  const fee      = p[5]||'—';
+  const procTime = p[6]||'—';
+  const denom    = dSel.value;
+  const txnLabel = rSel.options[rSel.selectedIndex].text;
+  const denomLabel = dSel.options[dSel.selectedIndex].text;
+
+  const now   = new Date();
+  const yyyy  = now.getFullYear();
+  const mL    = ML[now.getMonth()];
+  const seq   = nextSeq();
+  const dateStr = document.getElementById('dateReceived').value;
+
+  // ── Reference code generation ────────────────────────────────────────────
+  let refCode;
+  if (regime==='VIS') {
+    const yyyymmdd=`${yyyy}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    refCode=`VIS-RFRO12-${yyyymmdd}-${seq}`;
+  } else {
+    refCode=`R12-${mc2017}-${denom}-${yyyy}-${mL}-${seq}`;
+  }
+
+  // ── Populate Screen 2 ────────────────────────────────────────────────────
+  document.getElementById('regRefCode').textContent   = refCode;
+  document.getElementById('regApplicant').textContent = applicant;
+  document.getElementById('regEntity').textContent    = entity||'(Not registered / Walk-in)';
+  document.getElementById('regTxn').textContent       = txnLabel;
+  document.getElementById('regDenom').textContent     = denomLabel;
+  document.getElementById('regDate').textContent      = dateStr;
+  document.getElementById('regFee').textContent       = fee;
+  document.getElementById('regTime').textContent      = procTime;
+
+  // Routing Slip fields
+  document.getElementById('slipApplicant').textContent = applicant;
+  document.getElementById('slipEntity').textContent    = entity||'(Walk-in)';
+  document.getElementById('slipTxn').textContent       = txnLabel;
+  document.getElementById('slipRef').textContent       = refCode;
+  document.getElementById('slipDate').textContent      = now.toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'})+' '+now.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('slipFolder').textContent    = folder;
+
+  // Folder color box — cssText ensures background prints correctly
+  const colorBox   = document.getElementById('folderColorBox');
+  const colorLabel = document.getElementById('folderColorLabel');
+  if (colorBox && folderHex) {
+    const lightColors = ['#FFFFFF','#FFFFDD','#FFFF00','#FFD700','#F5F5DC','#E6E6FA','#98FF98','#FFB3D9','#64B5F6'];
+    const isLight   = lightColors.includes(folderHex);
+    const borderCol = isLight ? '#999' : 'rgba(0,0,0,.25)';
+    const labelCol  = isLight ? 'rgba(0,0,0,.75)' : 'rgba(255,255,255,.95)';
+    colorBox.setAttribute('style',
+      'width:80px;min-width:80px;height:40px;border-radius:5px;' +
+      'border:1.5px solid ' + borderCol + ';' +
+      'background:' + folderHex + ';' +
+      'flex-shrink:0;display:flex;align-items:center;justify-content:center;' +
+      '-webkit-print-color-adjust:exact;print-color-adjust:exact;'
+    );
+    colorLabel.setAttribute('style',
+      'font-size:9px;font-weight:700;color:' + labelCol + ';' +
+      'text-align:center;line-height:1.2;padding:2px;'
+    );
+    colorLabel.textContent = folder;
+  }
+
+  // Hide cashier row if fee is "No fee"
+  const cashierRow = document.getElementById('cashierRow');
+  if (cashierRow) {
+    const noFee = (fee.toLowerCase().trim() === 'no fee');
+    cashierRow.style.display = noFee ? 'none' : '';
+    // Re-number remaining rows if cashier hidden
+    const stationCells = document.querySelectorAll('.rtable .stn');
+    if (noFee) {
+      // Stations after cashier shift: 4→3, 5→4, 6→5 — show note in Assessment
+      const assessRemark = cashierRow.previousElementSibling?.querySelector('.flabel:last-child');
+    }
+  }
+
+  // Show screen 2
+  document.getElementById('screen-form').style.display       = 'none';
+  document.getElementById('screen-registered').style.display = 'block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ─── UNITS ─────────────────────────────────────────────────────────────────
+let unitCount = 0;
+function addUnit() {
+  unitCount++;
+  document.getElementById('noUnitsMsg').style.display='none';
+  const div = document.createElement('div');
+  div.className='unit-card';
+  div.id=`unit-${unitCount}`;
+  div.innerHTML=`
+    <div class="unit-title">UNIT ${unitCount}</div>
+    <button class="btn-remove" onclick="removeUnit(${unitCount})" title="Remove">×</button>
+    <div class="unit-grid">
+      <div class="fg"><label>Plate Number</label><input type="text" placeholder="e.g., NMO554"></div>
+      <div class="fg"><label>Make / Year</label><input type="text" placeholder="e.g., TOYOTA 2009"></div>
+      <div class="fg"><label>Engine No.</label><input type="text" placeholder="Engine number"></div>
+      <div class="fg span2"><label>Chassis No.</label><input type="text" placeholder="Chassis number"></div>
+      <div class="fg"><label>LTO OR No.</label><input type="text" placeholder="OR Number"></div>
+      <div class="fg"><label>LTO OR Expiry</label><input type="date"></div>
+      <div class="fg"><label>Last Confirmed</label><input type="date"></div>
+    </div>`;
+  document.getElementById('unitsList').appendChild(div);
+}
+function removeUnit(id) {
+  const el=document.getElementById(`unit-${id}`);
+  if(el) el.remove();
+  if(!document.querySelectorAll('.unit-card').length)
+    document.getElementById('noUnitsMsg').style.display='block';
+}
+
+// ─── ADMIN: RESET COUNTER ──────────────────────────────────────────────────
+function adminResetCounter() {
+  const PIN = '1217'; // MC 2017-002 PIN — change as needed
+  const entered = prompt('Enter Admin PIN to reset the docket counter:');
+  if (entered === null) return; // cancelled
+  if (entered !== PIN) { alert('⛔ Incorrect PIN. Counter not reset.'); return; }
+
+  const curr = parseInt(localStorage.getItem(SEQ_KEY)||'0', 10);
+  const confirmMsg = `⚠️ RESET DOCKET COUNTER?\n\nCurrent value: ${String(curr).padStart(4,'0')}\nThis will reset to 0000 (next issued: 0001).\n\nThis action is IRREVERSIBLE and should only be done at year-start or after a system migration.\n\nType YES to confirm:`;
+  const confirm = prompt(confirmMsg);
+  if (confirm !== 'YES') { alert('Reset cancelled.'); return; }
+
+  localStorage.setItem(SEQ_KEY, '0');
+  localStorage.setItem(SEQ_YEAR, String(new Date().getFullYear()));
+  updateSeqDisplay(1);
+  alert('✅ Counter reset. Next docket will be 0001.');
+}
+
+
+function resetForm() {
+  ['applicantName','entityName','contactNum','emailAddr'].forEach(id=>document.getElementById(id).value='');
+  ['denomination','requestType'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('infoBox').classList.remove('show');
+  document.getElementById('unitsList').innerHTML='<p id="noUnitsMsg" style="font-size:12px;color:var(--muted);margin-top:8px">No units added yet. Click "+ Add Unit" to include unit details.</p>';
+  unitCount=0; _currentParts=null;
+  document.getElementById('dateReceived').value=new Date().toISOString().split('T')[0];
+  document.getElementById('screen-form').style.display='block';
+  document.getElementById('screen-registered').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── Safe Print: swap visibility so registered screen prints correctly ──
+function safePrint() {
+  const formEl = document.getElementById('screen-form');
+  const regEl  = document.getElementById('screen-registered');
+  const appBar = document.querySelector('.app-bar');
+  const card   = document.querySelector('.card');
+
+  // Save current states
+  const formDisplay = formEl ? formEl.style.display : '';
+  const regDisplay  = regEl  ? regEl.style.display  : '';
+
+  // Force registered screen visible, hide form
+  if (formEl) formEl.style.display = 'none';
+  if (regEl)  regEl.style.display  = 'block';
+  if (appBar) appBar.style.display = 'none';
+  if (card)   card.style.boxShadow = 'none';
+
+  // Small delay to let browser repaint before print dialog
+  setTimeout(function() {
+    window.print();
+
+    // Restore after print dialog closes
+    setTimeout(function() {
+      if (formEl) formEl.style.display = formDisplay;
+      if (regEl)  regEl.style.display  = regDisplay;
+      if (appBar) appBar.style.display = '';
+      if (card)   card.style.boxShadow = '';
+    }, 500);
+  }, 100);
+}
+
+</script>
+</body>
+</html>
