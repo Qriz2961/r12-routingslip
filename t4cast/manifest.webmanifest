@@ -1,0 +1,16 @@
+{
+  "name": "RouteCast — Travel Demand Forecasting",
+  "short_name": "RouteCast",
+  "description": "Mobile four-step travel demand simulator: trip generation, distribution, modal split, traffic assignment, public transport fleet sizing and report generation.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0f2f5",
+  "theme_color": "#1a3a4a",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

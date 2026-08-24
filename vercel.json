@@ -2,9 +2,12 @@
   "version": 2,
   "name": "r12-routingslip",
   "builds": [
-    { "src": "index.html", "use": "@vercel/static" }
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "t4cast/**", "use": "@vercel/static" }
   ],
   "routes": [
+    { "handle": "filesystem" },
+    { "src": "/t4cast(/.*)?", "dest": "/t4cast/index.html" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
