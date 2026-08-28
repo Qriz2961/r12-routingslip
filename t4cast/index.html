@@ -10,7 +10,13 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <title>RouteCast — Travel Demand Forecasting</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Loaded without blocking first paint: scripts wait on pending stylesheets, so a slow or
+     unreachable font host would otherwise hold up the whole app. The fallback stack carries
+     the page until Inter arrives. -->
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
 <style>
 :root{
 --navy:#1a3a4a; --navy2:#0f2530; --amber:#d4a537; --amber2:#b8891e;
@@ -31,11 +37,18 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,Arial,sans-serif;backg
   display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:40}
 .appbar .mark{width:34px;height:34px;border-radius:9px;background:var(--amber);color:var(--navy);
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0}
+.appbar .ttl{min-width:0}
 .appbar h1{font-size:16px;font-weight:700;letter-spacing:.2px;line-height:1.2}
+.appbar .sub,.appbar .scn .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .appbar .sub{font-size:10.5px;opacity:.7;margin-top:1px}
-.appbar .scn{margin-left:auto;text-align:right;max-width:44%}
+.appbar .scn{margin-left:auto;text-align:right;max-width:33%;min-width:0}
+.appbar .barbtn{width:28px;height:28px;flex-shrink:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.32);
+  background:none;color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;transition:.15s}
+.appbar .barbtn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.6)}
+.appbar .barbtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 .appbar .scn .lb{font-size:9px;letter-spacing:1px;color:var(--amber);font-weight:700}
-.appbar .scn .nm{font-size:11px;font-weight:600;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar .scn .nm{font-size:11px;font-weight:600;opacity:.92}
 
 /* ── bottom tab bar ──────────────────────────────────────── */
 .tabbar{position:fixed;bottom:0;left:0;right:0;z-index:50;display:flex;background:#fff;
@@ -215,8 +228,18 @@ h3.sub:first-child{margin-top:0}
 .dlg pre.prev{background:#f7f9fb;border:1px solid var(--border);border-radius:7px;padding:10px;
   font-family:'SFMono-Regular',Consolas,monospace;font-size:10px;line-height:1.55;color:#334;
   max-height:34vh;overflow:auto;white-space:pre;margin-top:9px}
+.dlg ol.trylist{margin:6px 0 0 17px;display:flex;flex-direction:column;gap:7px}
+.dlg ol.trylist li{font-size:12px;line-height:1.55;color:#334}
+.dlg ol.trylist li strong{color:var(--navy)}
 .dlg .fname{font-family:'SFMono-Regular',Consolas,monospace;font-size:11px;color:var(--navy);
   background:#f2f4f7;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:2px}
+
+
+/* ── focus visibility ─────────────────────────────────────── */
+.btn:focus-visible,.segbar button:focus-visible,.tabbar button:focus-visible,
+input:focus-visible,select:focus-visible,textarea:focus-visible{
+  outline:2px solid var(--amber);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 @media(max-width:344px){
   .kpis{grid-template-columns:1fr}
@@ -249,14 +272,16 @@ h3.sub:first-child{margin-top:0}
   <!-- ══ app bar ══════════════════════════════════════════ -->
   <div class="appbar">
     <div class="mark">RC</div>
-    <div>
+    <div class="ttl">
       <h1>RouteCast</h1>
-      <div class="sub">Travel Demand Forecasting</div>
+      <div class="sub">Travel demand forecasting</div>
     </div>
     <div class="scn">
       <div class="lb">SCENARIO</div>
       <div class="nm" id="barScenario">—</div>
     </div>
+    <button class="barbtn" onclick="UI.showHelp()" title="About this demo"
+            aria-label="About this demo">?</button>
   </div>
 
   <!-- ══ 1. DATA ══════════════════════════════════════════ -->
@@ -294,6 +319,10 @@ h3.sub:first-child{margin-top:0}
           <button class="btn sm" onclick="UI.loadPreset('r12')">Region XII</button>
           <button class="btn sm" onclick="UI.loadPreset('mini')">4-Zone Example</button>
           <button class="btn sm" onclick="UI.loadPreset('blank')">Blank</button>
+        </div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn sm amber" onclick="UI.shareScenario()">↗ Share scenario</button>
+          <button class="btn sm" onclick="UI.promptShareCode()">⭱ Load shared scenario</button>
         </div>
         <div class="btnrow" style="margin-top:8px">
           <button class="btn sm" onclick="UI.exportScenario()">⭳ Export JSON</button>

@@ -7,6 +7,7 @@ var UI = (function () {
 
   var STORE_SCN = 'rc.scenario.v1';
   var STORE_LIB = 'rc.library.v1';
+  var STORE_SEEN = 'rc.seen.v1';
 
   var S = null;      // current scenario
   var R = null;      // last simulation result
@@ -108,22 +109,7 @@ var UI = (function () {
   }
 
   function copyExport() {
-    if (!pendingExport) return;
-    var text = pendingExport.text;
-    function fallback() {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
-      document.body.appendChild(ta);
-      ta.select();
-      var okc = false;
-      try { okc = document.execCommand('copy'); } catch (e) { okc = false; }
-      document.body.removeChild(ta);
-      toast(okc ? 'Copied to clipboard' : 'Select the text above to copy it');
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () { toast('Copied to clipboard'); }, fallback);
-    } else fallback();
+    if (pendingExport) copyText(pendingExport.text, 'Copied to clipboard');
   }
 
   /* Saving a file takes two different routes. Served as an ordinary page the
@@ -1265,6 +1251,9 @@ var UI = (function () {
           '<button class="btn sm" onclick="UI.exportMatrixCSV()">⭳ OD matrix CSV</button>' +
           '<button class="btn sm" onclick="UI.exportScenario()">⭳ Scenario JSON</button>' +
         '</div>' +
+        '<div class="btnrow" style="margin-top:8px">' +
+          '<button class="btn sm amber" onclick="UI.shareScenario()">↗ Share this scenario</button>' +
+        '</div>' +
       '</div></div>';
 
     var k = R.kpi, p = S.params;
@@ -1585,6 +1574,248 @@ var UI = (function () {
         'Load dataset', false, apply);
   }
 
+  /* ══════════════════════════════════════════════════════════
+   * SHARING
+   * A scenario travels as a short code: the zone and corridor tables plus
+   * only the parameters that differ from the defaults, deflate-compressed
+   * and base64url-encoded. Small enough to live in a URL hash, and it
+   * works as a paste-able code where a link cannot travel (the app
+   * embedded in a frame does not know its own shareable address).
+   * ════════════════════════════════════════════════════════*/
+  function sameAsDefault(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+  /** Drop everything reconstructible from the defaults. */
+  function slimScenario(sc) {
+    var out = {
+      m: { n: sc.meta.name || '', a: sc.meta.studyArea || '',
+           b: sc.meta.preparedBy || '', o: sc.meta.notes || '' },
+      z: sc.zones, l: sc.links, p: {}, d: {}
+    };
+    Object.keys(sc.params).forEach(function (k) {
+      if (!sameAsDefault(sc.params[k], RCData.PARAMS[k])) out.p[k] = sc.params[k];
+    });
+    sc.modes.forEach(function (m) {
+      var base = RCData.MODES.filter(function (x) { return x.id === m.id; })[0];
+      if (!base) { out.d[m.id] = m; return; }            // a mode the defaults do not have
+      var diff = {};
+      Object.keys(m).forEach(function (k) {
+        if (!sameAsDefault(m[k], base[k])) diff[k] = m[k];
+      });
+      if (Object.keys(diff).length) out.d[m.id] = diff;
+    });
+    return out;
+  }
+
+  /** Rebuild a full scenario from a slim one. */
+  function fattenScenario(o) {
+    var sc = {
+      meta: { name: o.m.n, studyArea: o.m.a, preparedBy: o.m.b, notes: o.m.o,
+              preset: 'shared', created: new Date().toISOString() },
+      zones: o.z, links: o.l,
+      params: RCData.clone(RCData.PARAMS),
+      modes: RCData.clone(RCData.MODES)
+    };
+    Object.keys(o.p || {}).forEach(function (k) { sc.params[k] = o.p[k]; });
+    Object.keys(o.d || {}).forEach(function (id) {
+      var m = sc.modes.filter(function (x) { return x.id === id; })[0];
+      if (m) Object.keys(o.d[id]).forEach(function (k) { m[k] = o.d[id][k]; });
+      else sc.modes.push(o.d[id]);
+    });
+    return sc;
+  }
+
+  function toB64u(bytes) {
+    var bin = '', i;
+    for (i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function fromB64u(str) {
+    var b = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4) b += '=';
+    var bin = atob(b), out = new Uint8Array(bin.length), i;
+    for (i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function pipeThrough(bytes, stream) {
+    var w = stream.writable.getWriter();
+    w.write(bytes); w.close();
+    return new Response(stream.readable).arrayBuffer().then(function (buf) {
+      return new Uint8Array(buf);
+    });
+  }
+
+  /** Scenario -> share code. Resolves to a string. */
+  function encodeScenario(sc) {
+    var bytes = new TextEncoder().encode(JSON.stringify(slimScenario(sc)));
+    if (typeof CompressionStream === 'function') {
+      try {
+        return pipeThrough(bytes, new CompressionStream('deflate-raw'))
+          .then(function (z) { return 'z' + toB64u(z); },
+                function () { return 'j' + toB64u(bytes); });
+      } catch (e) { /* fall through to the uncompressed form */ }
+    }
+    return Promise.resolve('j' + toB64u(bytes));
+  }
+
+  /** Share code -> scenario. Resolves to null if the code will not read. */
+  function decodeScenario(code) {
+    code = String(code || '').trim().replace(/^#/, '').replace(/^s=/, '');
+    if (!code) return Promise.resolve(null);
+    var kind = code.charAt(0), body = code.slice(1), bytes;
+    try { bytes = fromB64u(body); } catch (e) { return Promise.resolve(null); }
+    var raw = (kind === 'z' && typeof DecompressionStream === 'function')
+      ? pipeThrough(bytes, new DecompressionStream('deflate-raw'))
+      : (kind === 'j' ? Promise.resolve(bytes) : Promise.reject(new Error('unknown format')));
+    return raw.then(function (b) {
+      var o = JSON.parse(new TextDecoder().decode(b));
+      if (!o || !Array.isArray(o.z) || !Array.isArray(o.l) || !o.m) throw new Error('not a scenario');
+      return fattenScenario(o);
+    }).catch(function () { return null; });
+  }
+
+  /** True when this copy of the app knows an address worth sharing. */
+  function isTopLevel() {
+    try { return window.top === window.self && /^https?:/.test(location.protocol); }
+    catch (e) { return false; }
+  }
+  function shareURL(code) {
+    return location.origin + location.pathname + location.search + '#s=' + code;
+  }
+
+  var pendingShare = null;
+
+  function shareScenario() {
+    encodeScenario(S).then(function (code) {
+      pendingShare = code;
+      var link = isTopLevel() ? shareURL(code) : null;
+      var size = (code.length / 1024).toFixed(1);
+      showDialog(
+        '<div class="dlg-hd"><h4>Share this scenario</h4></div>' +
+        '<div class="dlg-bd"><p>' +
+        (link ? 'Anyone who opens this link gets your zones, corridors and parameters exactly as they are now.'
+              : 'Send this code. The person you send it to opens RouteCast, taps ' +
+                '<strong>Load shared scenario</strong> on the Data screen and pastes it in.') +
+        '</p><pre class="prev">' + esc(link || code) + '</pre>' +
+        '<p style="color:#667085;font-size:11px">' + esc(size) + ' KB · ' +
+        S.zones.length + ' zones · ' + S.links.length + ' corridors · results are recomputed on open</p></div>' +
+        '<div class="dlg-ft"><button class="btn" onclick="UI.closeDialog()">Close</button>' +
+        (link ? '<button class="btn" onclick="UI.copyShare(1)">Copy code</button>' +
+                '<button class="btn primary" onclick="UI.copyShare(0)">Copy link</button>'
+              : '<button class="btn primary" onclick="UI.copyShare(1)">Copy code</button>') +
+        '</div>');
+    });
+  }
+
+  function copyShare(codeOnly) {
+    if (!pendingShare) return;
+    copyText(codeOnly ? pendingShare : shareURL(pendingShare),
+             codeOnly ? 'Code copied' : 'Link copied');
+  }
+
+  /** Clipboard write with a select-and-copy fallback for older engines. */
+  function copyText(text, okMsg) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      var done = false;
+      try { done = document.execCommand('copy'); } catch (e) { done = false; }
+      document.body.removeChild(ta);
+      toast(done ? okMsg : 'Select the text above to copy it');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast(okMsg); }, fallback);
+    } else fallback();
+  }
+
+  function promptShareCode() {
+    askText('Load a shared scenario', 'Paste the link or code', '', 'Load', function (code) {
+      decodeScenario(code.replace(/^.*#s=/, '')).then(function (sc) {
+        if (!sc) {
+          tell('That code did not read',
+               'Paste the whole link or the whole code exactly as it was sent to you.');
+          return;
+        }
+        S = sc; compareWith = null; invalidate();
+        save(); renderAll(); go('data');
+        toast('Shared scenario loaded');
+      });
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════
+   * WELCOME & HELP
+   * ════════════════════════════════════════════════════════*/
+  var TRY_THIS = [
+    ['Run it', 'Tap Run. The model grows the population to the horizon year, ' +
+               'distributes the trips, splits them by mode and loads them on the network.'],
+    ['Read the matrix', 'Results → Matrix shows who travels where. Shading is trip volume; ' +
+               'the diagonal is travel that stays inside a zone.'],
+    ['Break a corridor', 'Data → Corridor network, drop Koronadal–Surallah to 1 lane, ' +
+               'then re-run. Watch its level of service fall and traffic reroute.'],
+    ['Price the car off the road', 'Model → Mode characteristics → Private Car. ' +
+               'Raise the per-km cost and see the mode split move to public transport.'],
+    ['Compare two futures', 'Run → Scenario library. Save the run, change the growth rate, ' +
+               're-run, then tap Compare.'],
+    ['Take the report', 'Report → Print / Save PDF, or export the results as CSV.']
+  ];
+
+  function showHelp(firstRun, sharedName) {
+    var intro = firstRun
+      ? (sharedName
+          ? '<p>Someone shared a travel demand scenario with you: <strong>' + esc(sharedName) +
+            '</strong>. It is loaded and ready to run.</p>'
+          : '<p>A four-step travel demand model that fits on a phone. It forecasts how many ' +
+            'trips a region will make, where they go, which mode carries them, which roads ' +
+            'they fill, and how many public transport units that needs.</p>')
+      : '<p>RouteCast runs the four-step travel demand chain — generation, distribution, ' +
+        'modal split and assignment — with congested-network feedback, then writes the ' +
+        'forecast up as a report.</p>';
+
+    showDialog(
+      '<div class="dlg-hd"><h4>' + (firstRun ? 'Welcome to RouteCast' : 'About RouteCast') + '</h4></div>' +
+      '<div class="dlg-bd">' + intro +
+      '<p style="font-weight:700;color:#1a3a4a;margin-top:12px">Things to try</p>' +
+      '<ol class="trylist">' + TRY_THIS.map(function (t) {
+        return '<li><strong>' + esc(t[0]) + '.</strong> ' + esc(t[1]) + '</li>';
+      }).join('') + '</ol>' +
+      '<p style="color:#667085;font-size:11px;margin-top:10px">Everything runs on this device and ' +
+      'is kept in this browser — nothing is uploaded. Figures are model estimates from the ' +
+      'inputs shown, for planning use only.</p>' +
+      (firstRun ? '' :
+        '<div class="row-end"><button class="btn sm danger" onclick="UI.resetDemo()">' +
+        'Reset the demo</button></div>') +
+      '</div>' +
+      '<div class="dlg-ft">' +
+        '<button class="btn" onclick="UI.closeDialog()">' + (firstRun ? 'Explore the data' : 'Close') + '</button>' +
+        '<button class="btn primary" onclick="UI.startDemoRun()">Run the sample forecast</button>' +
+      '</div>');
+    try { localStorage.setItem(STORE_SEEN, '1'); } catch (e) { /* private mode */ }
+  }
+
+  function startDemoRun() {
+    closeDialog();
+    go('run');
+    setTimeout(function () { if (!$('btnRun').disabled) runSim(); }, 220);
+  }
+
+  function resetDemo() {
+    closeDialog();
+    ask('Reset the demo?',
+        'This clears the scenario, the saved runs and everything else this app has kept ' +
+        'in your browser, then starts again from the Region XII dataset.',
+        'Reset everything', true, function () {
+      try {
+        localStorage.removeItem(STORE_SCN);
+        localStorage.removeItem(STORE_LIB);
+        localStorage.removeItem(STORE_SEEN);
+      } catch (e) { /* private mode */ }
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* framed */ }
+      location.reload();
+    });
+  }
+
   function renderAll() {
     renderMeta(); renderZones(); renderLinks(); renderParams(); renderModes(); renderRun();
     if (screen === 'results') renderResults();
@@ -1602,13 +1833,47 @@ var UI = (function () {
     });
   }
 
+  function boot(scenario) {
+    S = scenario || RCData.makeScenario('r12');
+    if (!S.meta.name) S.meta.name = RCData.PRESETS.r12.meta.name;
+    if (!S.modes) S.modes = RCData.clone(RCData.MODES);
+    renderAll();
+  }
+
+  function firstVisit() {
+    try { return !localStorage.getItem(STORE_SEEN); } catch (e) { return true; }
+  }
+
   function init() {
     bindDialogKeys();
     initDownloads();
-    S = load() || RCData.makeScenario('r12');
-    if (!S.meta.name) S.meta.name = RCData.PRESETS.r12.meta.name;
     LIB = loadLib();
-    renderAll();
+
+    // A shared link carries the scenario in the hash and wins over stored state.
+    var hash = '';
+    try { hash = (location.hash || '').replace(/^#/, ''); } catch (e) { hash = ''; }
+    var shared = /^s=/.test(hash) ? hash.slice(2) : '';
+
+    if (shared) {
+      boot(load());                                  // show something while decoding
+      decodeScenario(shared).then(function (sc) {
+        if (sc) {
+          S = sc; save();
+          try { history.replaceState(null, '', location.pathname + location.search); }
+          catch (e) { /* framed pages cannot rewrite their address */ }
+          renderAll(); go('data');
+          showHelp(true, sc.meta.name);
+        } else {
+          tell('That shared link did not read',
+               'The scenario code in the link is incomplete or from a newer version. ' +
+               'Ask for the link again, or carry on with the sample dataset.');
+        }
+      });
+    } else {
+      boot(load());
+      if (firstVisit()) setTimeout(function () { showHelp(true); }, 300);
+    }
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').catch(function () { /* offline support is optional */ });
@@ -1629,7 +1894,9 @@ var UI = (function () {
     closeDialog: closeDialog, dialogOk: dialogOk,
     copyExport: copyExport, downloadExport: downloadExport,
     exportScenario: exportScenario, importScenario: importScenario,
-    exportCSV: exportCSV, exportMatrixCSV: exportMatrixCSV
+    exportCSV: exportCSV, exportMatrixCSV: exportMatrixCSV,
+    shareScenario: shareScenario, copyShare: copyShare, promptShareCode: promptShareCode,
+    showHelp: showHelp, startDemoRun: startDemoRun, resetDemo: resetDemo
   };
 })();
 

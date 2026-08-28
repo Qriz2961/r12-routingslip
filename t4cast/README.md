@@ -120,6 +120,28 @@ volumes averaged by the method of successive averages,
 `v⁽ⁿ⁾ = v⁽ⁿ⁻¹⁾ + (1/n)(v_new − v⁽ⁿ⁻¹⁾)`, so the loop settles instead of
 oscillating.
 
+## Sharing a scenario
+
+A scenario travels as a short code: the zone and corridor tables plus only the
+parameters that differ from the defaults, deflate-compressed and base64url
+encoded. A fully edited eight-zone study area comes to about 0.9 KB — small
+enough to live in a URL.
+
+- **Share scenario** (Data screen, or the Report screen) copies a link like
+  `…/t4cast/#s=zldXdat…`. Opening it loads those exact inputs, tells the
+  recipient what they have opened, then clears the hash so their own edits
+  behave normally.
+- Where the app is embedded and cannot know its own address, the same sheet
+  offers the bare code instead; the recipient pastes it into **Load shared
+  scenario**.
+- Results are never shared — they are recomputed on open, so the recipient sees
+  the model actually run on the inputs they were sent.
+
+A first-run sheet introduces the app, lists six things to try, and can run the
+sample forecast in one tap. It reappears from the **?** button in the app bar,
+which also offers **Reset the demo** — clearing the scenario, the saved runs and
+the first-run flag.
+
 ## Report generation
 
 The Report screen assembles a nine-section forecast document: executive summary
@@ -142,21 +164,28 @@ t4cast/
   app.js                state, screens, charts, report, exports
   manifest.webmanifest  PWA manifest
   sw.js                 service worker (network-first, offline fallback)
+  build-standalone.js   inlines the JS into one page (--fragment for embedding)
   test-engine.mjs       numeric sanity + sensitivity tests
 ```
 
 ## Tests
 
 ```bash
-node t4cast/test-engine.mjs
+node t4cast/test-engine.mjs          # 29 numeric checks
+node t4cast/build-standalone.js      # one self-contained page
 ```
 
-29 checks: matrix conservation (row totals = productions, column totals =
+The engine suite's 29 checks: matrix conservation (row totals = productions, column totals =
 attractions), mode share closure, Furness and feedback convergence,
 plausibility bands for trips per capita and trip length, growth compounding,
 sensitivity (tripling car cost lowers car share; halving capacity raises V/C and
 lowers network speed), all four deterrence functions, and edge cases
 (disconnected zone, no links at all, zero-year horizon).
+
+Browser-level behaviour is covered by Playwright suites kept alongside the
+session that wrote them: the app proper (38), scenario sharing and the first-run
+experience (25), the inlined single-file build (16), the four file-save
+environments (10), and the app running inside a sandboxed frame (7).
 
 ## Limitations
 
