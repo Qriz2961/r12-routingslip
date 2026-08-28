@@ -34,14 +34,150 @@ var UI = (function () {
   function longDate() {
     return new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   }
-  function download(name, mime, text) {
-    var blob = new Blob([text], { type: mime });
+  /* ── in-page dialogs ──────────────────────────────────────
+   * Native confirm/prompt are unavailable in sandboxed frames and look
+   * out of place on a phone, so the app carries its own.
+   * ------------------------------------------------------------------*/
+  var pendingOk = null;
+
+  function showDialog(html, onOk) {
+    pendingOk = onOk || null;
+    $('dlgBox').innerHTML = html;
+    $('dlgOverlay').classList.add('show');
+    var f = $('dlgBox').querySelector('input,button.primary,button.danger');
+    if (f) setTimeout(function () { f.focus(); if (f.select) f.select(); }, 40);
+  }
+  function closeDialog() { $('dlgOverlay').classList.remove('show'); pendingOk = null; }
+  function dialogOk() {
+    var fn = pendingOk, input = $('dlgBox').querySelector('#dlgInput');
+    var val = input ? input.value : true;
+    closeDialog();
+    if (fn) fn(val);
+  }
+
+  /** Confirmation. `cb` runs only if the user confirms. */
+  function ask(title, message, okLabel, danger, cb) {
+    showDialog(
+      '<div class="dlg-hd"><h4>' + esc(title) + '</h4></div>' +
+      '<div class="dlg-bd"><p>' + esc(message) + '</p></div>' +
+      '<div class="dlg-ft"><button class="btn" onclick="UI.closeDialog()">Cancel</button>' +
+      '<button class="btn ' + (danger ? 'danger' : 'primary') +
+      '" onclick="UI.dialogOk()">' + esc(okLabel) + '</button></div>', cb);
+  }
+
+  /** Text entry. `cb` receives the entered string. */
+  function askText(title, label, value, okLabel, cb) {
+    showDialog(
+      '<div class="dlg-hd"><h4>' + esc(title) + '</h4></div>' +
+      '<div class="dlg-bd"><div class="fg"><label>' + esc(label) + '</label>' +
+      '<input type="text" id="dlgInput" value="' + esc(value) + '"></div></div>' +
+      '<div class="dlg-ft"><button class="btn" onclick="UI.closeDialog()">Cancel</button>' +
+      '<button class="btn primary" onclick="UI.dialogOk()">' + esc(okLabel) + '</button></div>',
+      function (v) { if (v && String(v).trim()) cb(String(v).trim()); });
+  }
+
+  /** Message-only dialog. */
+  function tell(title, message) {
+    showDialog(
+      '<div class="dlg-hd"><h4>' + esc(title) + '</h4></div>' +
+      '<div class="dlg-bd"><p>' + esc(message) + '</p></div>' +
+      '<div class="dlg-ft"><button class="btn primary" onclick="UI.closeDialog()">OK</button></div>');
+  }
+
+  /* ── export sheet ─────────────────────────────────────────
+   * Shows what is being exported, then offers both routes out: the
+   * clipboard (which works everywhere, including embedded frames where
+   * file downloads are blocked) and a file download.
+   * ------------------------------------------------------------------*/
+  var pendingExport = null;
+
+  function exportData(name, mime, text) {
+    pendingExport = { name: name, mime: mime, text: text };
+    var lines = text.split('\n');
+    var preview = lines.slice(0, 40).join('\n');
+    if (lines.length > 40) preview += '\n… ' + (lines.length - 40) + ' more lines';
+    showDialog(
+      '<div class="dlg-hd"><h4>Export</h4></div>' +
+      '<div class="dlg-bd"><p>Copy this to the clipboard, or save it as a file.</p>' +
+      '<span class="fname">' + esc(name) + '</span>' +
+      '<pre class="prev">' + esc(preview) + '</pre></div>' +
+      '<div class="dlg-ft"><button class="btn" onclick="UI.closeDialog()">Close</button>' +
+      '<button class="btn" onclick="UI.copyExport()">Copy</button>' +
+      (dlMode === 'unavailable' ? '' :
+        '<button class="btn primary" onclick="UI.downloadExport()">Download</button>') + '</div>');
+  }
+
+  function copyExport() {
+    if (!pendingExport) return;
+    var text = pendingExport.text;
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      var okc = false;
+      try { okc = document.execCommand('copy'); } catch (e) { okc = false; }
+      document.body.removeChild(ta);
+      toast(okc ? 'Copied to clipboard' : 'Select the text above to copy it');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { toast('Copied to clipboard'); }, fallback);
+    } else fallback();
+  }
+
+  /* Saving a file takes two different routes. Served as an ordinary page the
+   * app writes a blob and clicks it. Embedded in a host that mediates saves,
+   * frame code cannot download directly, so the host's downloads capability
+   * asks the viewer instead. `dlMode` records which route this view has. */
+  var dlMode = (typeof window !== 'undefined' && window.claude && window.claude.use)
+             ? 'pending' : 'native';
+  var dlSaver = null;
+
+  function initDownloads() {
+    if (dlMode !== 'pending') return null;
+    return window.claude.use('downloads').then(function (ns) {
+      dlSaver = ns;
+      dlMode = ns ? 'mediated' : 'unavailable';
+      if (dlMode === 'unavailable' && $('dlgOverlay').classList.contains('show')) {
+        var btn = $('dlgBox').querySelector('.btn.primary');
+        if (btn && /Download/.test(btn.textContent)) btn.remove();
+      }
+    }, function () { dlMode = 'unavailable'; });
+  }
+
+  function saveFile(ex) {
+    if (dlMode === 'mediated' && dlSaver) {
+      dlSaver.save({ filename: ex.name, data: ex.text }).then(function () {
+        toast('Saved ' + ex.name);
+      }, function (err) {
+        switch (err && err.code) {
+          case 'declined':     break;                    // the viewer said no
+          case 'rate_limited': toast('A save is already open — try again in a moment'); break;
+          case 'too_large':    toast('Too large to save — use Copy instead'); break;
+          default:             toast('Saving is unavailable here — use Copy instead');
+        }
+      });
+      return;
+    }
+    if (dlMode === 'unavailable') { toast('Saving is unavailable here — use Copy instead'); return; }
+    var blob = new Blob([ex.text], { type: ex.mime });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
-    a.href = url; a.download = name;
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a);
+    a.href = url; a.download = ex.name; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    toast('Saved ' + ex.name);
+  }
+
+  function downloadExport() {
+    if (!pendingExport) return;
+    var ex = pendingExport;
+    if (dlMode === 'pending') {
+      var pending = initDownloads();
+      if (pending) { pending.then(function () { saveFile(ex); }); return; }
+    }
+    saveFile(ex);
   }
 
   /* ─────────────────────────────────────────── persistence ── */
@@ -166,11 +302,17 @@ var UI = (function () {
   }
   function removeZone(i) {
     var z = S.zones[i];
-    if (!confirm('Delete ' + (z.name || z.id) + '? Corridors that use it will also be removed.')) return;
-    S.zones.splice(i, 1);
-    S.links = S.links.filter(function (L) { return L.from !== z.id && L.to !== z.id; });
-    save(); invalidate(); renderZones(); renderLinks();
-    toast('Zone deleted');
+    var affected = S.links.filter(function (L) { return L.from === z.id || L.to === z.id; }).length;
+    ask('Delete ' + (z.name || z.id) + '?',
+        affected ? 'This also removes ' + affected + ' corridor' + (affected > 1 ? 's' : '') +
+                   ' that connect to it.'
+                 : 'No corridors use this zone.',
+        'Delete zone', true, function () {
+      S.zones.splice(i, 1);
+      S.links = S.links.filter(function (L) { return L.from !== z.id && L.to !== z.id; });
+      save(); invalidate(); renderZones(); renderLinks();
+      toast('Zone deleted');
+    });
   }
 
   function zoneOptions(sel) {
@@ -409,11 +551,15 @@ var UI = (function () {
     if (rerender) { /* select changes need no redraw beyond derived text */ }
   }
   function resetParams() {
-    if (!confirm('Reset all model parameters and mode characteristics to defaults?')) return;
-    S.params = RCData.clone(RCData.PARAMS);
-    S.modes = RCData.clone(RCData.MODES);
-    save(); invalidate(); renderParams(); renderModes();
-    toast('Parameters reset');
+    ask('Reset parameters?',
+        'Every model coefficient and mode characteristic returns to its default value. ' +
+        'Your zones and corridors are not affected.',
+        'Reset', true, function () {
+      S.params = RCData.clone(RCData.PARAMS);
+      S.modes = RCData.clone(RCData.MODES);
+      save(); invalidate(); renderParams(); renderModes();
+      toast('Parameters reset');
+    });
   }
 
   var MODE_FIELDS = [
@@ -524,8 +670,12 @@ var UI = (function () {
     }).join('');
   }
 
+  /** Discard the current results — the inputs they were computed from changed. */
   function invalidate() {
-    if (R) { R = null; $('runSummary').innerHTML = ''; renderSteps(-1); }
+    if (!R && !$('runSummary').innerHTML) return;
+    R = null;
+    $('runSummary').innerHTML = '';
+    renderSteps(-1);
   }
 
   function runSim() {
@@ -582,8 +732,11 @@ var UI = (function () {
   /* ─────────────────────────────────────── scenario library ── */
   function saveToLibrary() {
     if (!R) { toast('Run the simulation first'); return; }
-    var name = prompt('Save this run as:', S.meta.name || 'Scenario ' + (LIB.length + 1));
-    if (!name) return;
+    askText('Save run', 'Name this run', S.meta.name || 'Scenario ' + (LIB.length + 1),
+            'Save', function (name) { storeRun(name); });
+  }
+
+  function storeRun(name) {
     LIB.push({
       id: 'run' + Date.now(),
       name: name,
@@ -606,8 +759,11 @@ var UI = (function () {
   }
   function clearLibrary() {
     if (!LIB.length) { toast('Library is already empty'); return; }
-    if (!confirm('Delete all ' + LIB.length + ' saved runs?')) return;
-    LIB = []; compareWith = null; saveLib(); renderLibrary(); toast('Library cleared');
+    ask('Clear the library?', 'This deletes all ' + LIB.length + ' saved run' +
+        (LIB.length > 1 ? 's' : '') + '. The current scenario stays as it is.',
+        'Delete all', true, function () {
+      LIB = []; compareWith = null; saveLib(); renderLibrary(); toast('Library cleared');
+    });
   }
   function removeFromLibrary(i) {
     LIB.splice(i, 1);
@@ -615,10 +771,13 @@ var UI = (function () {
     saveLib(); renderLibrary();
   }
   function restoreFromLibrary(i) {
-    if (!confirm('Replace the current scenario with "' + LIB[i].name + '"? Unsaved edits will be lost.')) return;
-    S = RCData.clone(LIB[i].scenario);
-    R = null; save();
-    renderAll(); go('data'); toast('Scenario restored');
+    ask('Restore "' + LIB[i].name + '"?',
+        'The current scenario is replaced by the saved one. Unsaved edits will be lost.',
+        'Restore', false, function () {
+      S = RCData.clone(LIB[i].scenario);
+      invalidate(); save();
+      renderAll(); go('data'); toast('Scenario restored');
+    });
   }
   function setCompare(i) {
     compareWith = (compareWith === i) ? null : i;
@@ -1304,8 +1463,7 @@ var UI = (function () {
   }
 
   function exportScenario() {
-    download(slug(S.meta.name) + '-scenario.json', 'application/json', JSON.stringify(S, null, 2));
-    toast('Scenario exported');
+    exportData(slug(S.meta.name) + '-scenario.json', 'application/json', JSON.stringify(S, null, 2));
   }
   function importScenario(input) {
     var f = input.files && input.files[0];
@@ -1317,10 +1475,11 @@ var UI = (function () {
         if (!o.zones || !o.links || !o.params) throw new Error('Not a RouteCast scenario file.');
         if (!o.modes) o.modes = RCData.clone(RCData.MODES);
         if (!o.meta) o.meta = { name: f.name.replace(/\.json$/i, '') };
-        S = o; R = null; save(); renderAll(); go('data');
+        S = o; invalidate(); save(); renderAll(); go('data');
         toast('Scenario imported');
       } catch (e) {
-        alert('Could not read that file: ' + (e.message || e));
+        tell('Could not read that file',
+             (e.message || String(e)) + ' Choose a scenario JSON exported from RouteCast.');
       }
       input.value = '';
     };
@@ -1386,8 +1545,7 @@ var UI = (function () {
       });
     });
 
-    download(slug(S.meta.name) + '-results.csv', 'text/csv;charset=utf-8', csvRows(rows));
-    toast('Results CSV exported');
+    exportData(slug(S.meta.name) + '-results.csv', 'text/csv;charset=utf-8', csvRows(rows));
   }
 
   function exportMatrixCSV() {
@@ -1405,21 +1563,26 @@ var UI = (function () {
     }
     colTot.push(Math.round(R.kpi.totalTrips));
     rows.push(colTot);
-    download(slug(S.meta.name) + '-od-matrix.csv', 'text/csv;charset=utf-8', csvRows(rows));
-    toast('OD matrix exported');
+    exportData(slug(S.meta.name) + '-od-matrix.csv', 'text/csv;charset=utf-8', csvRows(rows));
   }
 
   /* ══════════════════════════════════════════════════════════
    * BOOT
    * ════════════════════════════════════════════════════════*/
   function loadPreset(which) {
-    if (S && !confirm('Replace the current scenario with the ' +
-        (which === 'r12' ? 'Region XII' : which === 'mini' ? 'four-zone example' : 'blank') +
-        ' dataset? Unsaved edits will be lost.')) return;
-    S = (which === 'blank') ? RCData.blankScenario() : RCData.makeScenario(which);
-    R = null; compareWith = null;
-    save(); renderAll(); go('data');
-    toast('Dataset loaded');
+    var label = which === 'r12' ? 'Region XII corridors'
+              : which === 'mini' ? 'four-zone example' : 'blank';
+    function apply() {
+      S = (which === 'blank') ? RCData.blankScenario() : RCData.makeScenario(which);
+      compareWith = null; invalidate();
+      save(); renderAll(); go('data');
+      toast('Dataset loaded');
+    }
+    if (!S) { apply(); return; }
+    ask('Load the ' + label + ' dataset?',
+        'This replaces the current zones, corridors and parameters. ' +
+        'Export the scenario first if you want to keep it.',
+        'Load dataset', false, apply);
   }
 
   function renderAll() {
@@ -1428,7 +1591,20 @@ var UI = (function () {
     if (screen === 'report') renderReport();
   }
 
+  function bindDialogKeys() {
+    $('dlgOverlay').addEventListener('click', function (e) {
+      if (e.target === this) closeDialog();          // click the backdrop to dismiss
+    });
+    document.addEventListener('keydown', function (e) {
+      if (!$('dlgOverlay').classList.contains('show')) return;
+      if (e.key === 'Escape') { closeDialog(); }
+      else if (e.key === 'Enter' && e.target && e.target.id === 'dlgInput') { dialogOk(); }
+    });
+  }
+
   function init() {
+    bindDialogKeys();
+    initDownloads();
     S = load() || RCData.makeScenario('r12');
     if (!S.meta.name) S.meta.name = RCData.PRESETS.r12.meta.name;
     LIB = loadLib();
@@ -1450,9 +1626,15 @@ var UI = (function () {
     saveToLibrary: saveToLibrary, clearLibrary: clearLibrary,
     removeFromLibrary: removeFromLibrary, restoreFromLibrary: restoreFromLibrary,
     setCompare: setCompare, toggleReportOpt: toggleReportOpt,
+    closeDialog: closeDialog, dialogOk: dialogOk,
+    copyExport: copyExport, downloadExport: downloadExport,
     exportScenario: exportScenario, importScenario: importScenario,
     exportCSV: exportCSV, exportMatrixCSV: exportMatrixCSV
   };
 })();
 
-document.addEventListener('DOMContentLoaded', UI.init);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', UI.init);
+} else {
+  UI.init();
+}

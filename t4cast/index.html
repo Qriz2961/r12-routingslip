@@ -199,6 +199,25 @@ h3.sub:first-child{margin-top:0}
 .sigblock div{font-size:10px;color:var(--muted)}
 .sigblock .line{border-bottom:1px solid #999;height:34px;margin-bottom:4px}
 
+
+/* ── dialogs & export sheet ───────────────────────────────── */
+.ovl{position:fixed;inset:0;z-index:80;background:rgba(15,37,48,.55);display:none;
+  align-items:center;justify-content:center;padding:20px}
+.ovl.show{display:flex}
+.dlg{background:#fff;border-radius:12px;max-width:430px;width:100%;overflow:hidden;
+  box-shadow:0 18px 50px rgba(0,0,0,.32);max-height:88vh;display:flex;flex-direction:column}
+.dlg-hd{padding:15px 18px 0}
+.dlg-hd h4{font-size:15px;font-weight:700;color:var(--navy)}
+.dlg-bd{padding:9px 18px 4px;overflow-y:auto}
+.dlg-bd p{font-size:12.5px;line-height:1.6;color:#334}
+.dlg-ft{padding:14px 18px;display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap}
+.dlg-ft .btn{flex:1;min-width:104px}
+.dlg pre.prev{background:#f7f9fb;border:1px solid var(--border);border-radius:7px;padding:10px;
+  font-family:'SFMono-Regular',Consolas,monospace;font-size:10px;line-height:1.55;color:#334;
+  max-height:34vh;overflow:auto;white-space:pre;margin-top:9px}
+.dlg .fname{font-family:'SFMono-Regular',Consolas,monospace;font-size:11px;color:var(--navy);
+  background:#f2f4f7;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:2px}
+
 @media(max-width:344px){
   .kpis{grid-template-columns:1fr}
   .grid3{grid-template-columns:1fr 1fr}
@@ -210,7 +229,7 @@ h3.sub:first-child{margin-top:0}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   body{background:#fff!important}
   .shell{max-width:100%!important;box-shadow:none!important;padding-bottom:0!important}
-  .appbar,.tabbar,.toast,.no-print,.segbar{display:none!important}
+  .appbar,.tabbar,.toast,.ovl,.no-print,.segbar{display:none!important}
   .screen{display:none!important;padding:0!important}
   #screen-report{display:block!important;padding:0!important}
   .report{border:none!important;border-radius:0!important}
@@ -399,6 +418,7 @@ h3.sub:first-child{margin-top:0}
   <button id="tab-report"  onclick="UI.go('report')"><span class="ic">📄</span><span class="lb">Report</span></button>
 </nav>
 
+<div class="ovl" id="dlgOverlay"><div class="dlg" id="dlgBox"></div></div>
 <div class="toast" id="toast"></div>
 
 <script src="data.js"></script>
